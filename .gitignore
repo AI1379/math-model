@@ -115,3 +115,17 @@ dmypy.json
 
 data/
 */data/
+
+# LaTeX middle files
+*.aux
+*.bbl
+*.blg
+*.idx
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
