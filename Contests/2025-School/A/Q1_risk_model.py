@@ -1,5 +1,5 @@
 import numpy as np
-import time
+from scipy.stats import beta
 import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -42,7 +42,7 @@ class RiskModel:
         self.nodes_data = nodes_data
         self.lines_data = lines_data
 
-        self.node_loads = {}
+        self.node_loads: Dict[int, float] = {}
         for i, row in nodes_data.iterrows():
             self.node_loads[i + 1] = row["有功P/kW"]
 
@@ -242,7 +242,48 @@ class RiskModel:
         :return: 过载风险
         """
         # TODO: 实现蒙特卡洛方法计算过载风险
-        pass
+        overload_count = 0
+        total_consequence = 0
+
+        base_node_loads = self.node_loads.copy()
+        base_dg_data = self.dg_data.copy()
+        dg_alpha, dg_beta = 5, 1
+
+        for _ in range(iterations):
+            # 负荷遵守正态分布
+            for node in base_node_loads.keys():
+                self.node_loads[node] = np.random.normal(
+                    loc=base_node_loads[node],
+                    scale=base_node_loads[node] * 0.1,
+                )
+
+            # 分布式发电机遵守 beta 分布
+            for index in range(len(base_dg_data)):
+                self.dg_data[index]["capacity"] = beta.rvs(
+                    a=dg_alpha,
+                    b=dg_beta,
+                    loc=0,
+                    scale=base_dg_data[index]["capacity"],
+                )
+
+            # 计算馈线电流
+            for feeder in self.feeder_regions.keys():
+                current = self._calculate_feeder_current(feeder)
+                if current > self.feeder_current_limit * 1.1:
+                    overload_count += 1
+                    overload_consequence = (
+                        (current - self.feeder_current_limit * 1.1)
+                        * self.feeder_capacity
+                        / (self.feeder_current_limit * 1.1)
+                    )
+                    total_consequence += overload_consequence
+
+        overload_risk = overload_count / (iterations * len(self.feeder_regions))
+        overload_consequence = total_consequence / (
+            iterations * len(self.feeder_regions)
+        )
+
+        return overload_risk, overload_consequence
 
     def calculate_overload_risk(self) -> float:
         """
@@ -257,29 +298,25 @@ class RiskModel:
 
         return max(0.1, total_risk)
 
-    def _calculate_feeder_overload_risk(self, feeder: str) -> float:
+    def _calculate_feeder_current(self, feeder: str) -> float:
         """
-        计算馈线过载风险
+        计算馈线电流
 
         :param feeder: 馈线名称
-        :return: 馈线过载风险
+        :return: 馈线电流
         """
-        # TODO: 检查过载模型具体实现是否正确
         nodes = self.feeder_regions[feeder]
 
         total_load = sum(self.node_loads[node] for node in nodes)
         dg_capacity = sum(dg["capacity"] for dg in self.dg_data if dg["node"] in nodes)
 
-        net_load = max(0, total_load - dg_capacity)
+        net_load = max(0, total_load - dg_capacity)  # 当前网络净负载
         excess_load = 0  # 额外负载
-        total_risk = 0
 
         if net_load > 0:
-            # TODO: 检查此处的计算是否正确
-            current = net_load / (np.sqrt(3) * 1000 * self.voltage)
+            current = net_load / (np.sqrt(3) * self.voltage)  # 考虑三相电流
         else:
             # DG的贡献大于负荷，考虑相邻馈线的负荷转移
-            current = 0
             excess_load = dg_capacity - total_load
 
             for _, (node1, node2) in self.tie_switches.items():
@@ -296,12 +333,20 @@ class RiskModel:
                     transferable_load = min(excess_load, other_remaining_capacity)
                     excess_load -= transferable_load
 
-        if excess_load > 0:
-            # 计算馈线过载风险
-            # 此处假设过负荷风险与过负荷量成正比，且损失为线性
-            overload_risk = min(1.0, excess_load / self.feeder_capacity)
-            overload_consequence = excess_load
-            total_risk += overload_risk * overload_consequence
+            net_load = total_load + max(0, excess_load)
+            current = net_load / (np.sqrt(3) * self.voltage)
+
+        return current
+
+    def _calculate_feeder_overload_risk(self, feeder: str) -> float:
+        """
+        计算馈线过载风险
+
+        :param feeder: 馈线名称
+        :return: 馈线过载风险
+        """
+        total_risk = 0.0
+        current = self._calculate_feeder_current(feeder)
 
         # 若电流超过馈线电流限制，则计算过载风险
         if current > self.feeder_current_limit * 1.1:
@@ -436,4 +481,5 @@ if __name__ == "__main__":
     print("负荷损失风险:", model.calculate_load_loss_risk())
     print("过载风险:", model.calculate_overload_risk())
     print("系统风险:", model.calculate_system_risk())
+    # print("蒙特卡洛过载风险:", model.calculate_overload_monte_carlo())
     model.draw_network()
