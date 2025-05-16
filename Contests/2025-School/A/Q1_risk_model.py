@@ -3,7 +3,7 @@ from scipy.stats import beta
 import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
-from typing import List, Dict, Tuple, Optional, Literal, Union
+from typing import IO, List, Dict, Tuple, Optional, Literal, Union
 
 
 class RiskModel:
@@ -67,8 +67,8 @@ class RiskModel:
         self.network = self._build_network()
 
         # 预处理馈线信息
-        self.feeder_regions = {}
-        self.feeder_table = {}
+        self.feeder_regions: Dict[str, List[int]] = {}
+        self.feeder_table: Dict[int, str] = {}
         for substation, node in substation_data.items():
             dfs_result = sorted(list(nx.dfs_postorder_nodes(self.network, node)))
             self.feeder_regions[substation] = dfs_result
@@ -399,13 +399,11 @@ class RiskModel:
             (u, v): f"{data['length']:.2f} km"
             for u, v, data in self.network.edges(data=True)
         }
-        max_label_length = max(
-            max(len(label) for label in node_labels.values()),
-            max(len(label) for label in edge_labels.values()),
-        )
 
         for u, v in self.network.edges():
             self.network.edges[u, v]["weight"] = 1 / len(edge_labels[(u, v)])
+
+        plt.figure(figsize=(14, 10))
 
         pos = nx.kamada_kawai_layout(self.network, weight="weight", scale=10)
         nx.draw(
@@ -433,7 +431,6 @@ class RiskModel:
 
         if path:
             plt.savefig(path)
-            plt.close()
         else:
             plt.show()
 
@@ -476,10 +473,27 @@ def get_default_model() -> RiskModel:
     return model
 
 
-if __name__ == "__main__":
+def analyze_system_risk(
+    topo_out: Optional[str] = None, log_out: Optional[IO[str]] = None
+) -> None:
+    """
+    分析系统风险
+    """
     model = get_default_model()
-    print("负荷损失风险:", model.calculate_load_loss_risk())
-    print("过载风险:", model.calculate_overload_risk())
-    print("系统风险:", model.calculate_system_risk())
-    # print("蒙特卡洛过载风险:", model.calculate_overload_monte_carlo())
-    model.draw_network()
+    system_risk, load_loss_risk, overload_risk = model.calculate_system_risk()
+    risk_level = "高" if system_risk > 30 else "中" if system_risk > 15 else "低"
+    print(f"====== 系统风险分析 ======", file=log_out)
+    print(f"系统风险: {system_risk}", file=log_out)
+    print(f"失负荷风险: {load_loss_risk}", file=log_out)
+    print(f"过负荷风险: {overload_risk}", file=log_out)
+    print(f"====== 风险占比 ======", file=log_out)
+    print(f"失负荷风险占比: {load_loss_risk / system_risk:.2%}", file=log_out)
+    print(f"过负荷风险占比: {overload_risk / system_risk:.2%}", file=log_out)
+    print(f"风险等级: {risk_level}", file=log_out)
+    print(f"====== 网络拓扑图 ======", file=log_out)
+    print(f"输出到: {topo_out}", file=log_out)
+    model.draw_network(topo_out)
+
+
+if __name__ == "__main__":
+    analyze_system_risk()
