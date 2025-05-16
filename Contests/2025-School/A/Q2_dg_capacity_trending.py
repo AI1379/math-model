@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional, IO, Tuple
-from Q1_risk_model import get_default_model
+from risk_model import get_default_model
 
 
 def analyze_dg_capacity(

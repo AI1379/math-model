@@ -9,7 +9,7 @@ if __name__ == "__main__":
     topology_graph = "problem1/topology_graph.png"
     system_risk_log = "problem1/system_risk_log.txt"
     analyze_system_risk(
-        topo_out=topology_graph,
+        topology_graph=topology_graph,
         log_out=open(system_risk_log, "w", encoding="utf-8"),
     )
     print(f"系统风险分析结果已保存到: {system_risk_log}")
