@@ -129,3 +129,5 @@ data/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+
+_minted/

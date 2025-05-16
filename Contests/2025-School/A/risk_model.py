@@ -141,8 +141,9 @@ class RiskModel:
             )
 
         loss = self.node_loads[node]
-        remaining_capacity = self._calculate_remaining_capacity(feeder)
-        transferable_load = min(loss, remaining_capacity)
+        transferable_load = 0
+        # remaining_capacity = self._calculate_remaining_capacity(feeder)
+        # transferable_load = min(loss, remaining_capacity)
         return loss - transferable_load
 
     def _calculate_line_failure_load_loss(self, line: Tuple[int, int]) -> float:
@@ -207,6 +208,7 @@ class RiskModel:
 
         :return: 负荷损失风险
         """
+        # TODO: 加权计算损失
         total_risk = 0.0
 
         # 分三部分计算风险
@@ -234,62 +236,14 @@ class RiskModel:
 
         return total_risk
 
-    def calculate_overload_monte_carlo(self, iterations: int = 10000) -> float:
-        """
-        使用蒙特卡洛方法计算过载风险
-
-        :param iterations: 蒙特卡洛迭代次数，默认为 10000
-        :return: 过载风险
-        """
-        overload_count = 0
-        total_consequence = 0
-
-        base_node_loads = self.node_loads.copy()
-        base_dg_data = self.dg_data.copy()
-        dg_alpha, dg_beta = 5, 1
-
-        for _ in range(iterations):
-            # 负荷遵守正态分布
-            for node in base_node_loads.keys():
-                self.node_loads[node] = np.random.normal(
-                    loc=base_node_loads[node],
-                    scale=base_node_loads[node] * 0.1,
-                )
-
-            # 分布式发电机遵守 beta 分布
-            for index in range(len(base_dg_data)):
-                self.dg_data[index]["capacity"] = beta.rvs(
-                    a=dg_alpha,
-                    b=dg_beta,
-                    loc=0,
-                    scale=base_dg_data[index]["capacity"],
-                )
-
-            # 计算馈线电流
-            for feeder in self.feeder_regions.keys():
-                current = self._calculate_feeder_current(feeder)
-                if current > self.feeder_current_limit * 1.1:
-                    overload_count += 1
-                    overload_consequence = (
-                        (current - self.feeder_current_limit * 1.1)
-                        * self.feeder_capacity
-                        / (self.feeder_current_limit * 1.1)
-                    )
-                    total_consequence += overload_consequence
-
-        overload_risk = overload_count / (iterations * len(self.feeder_regions))
-        overload_consequence = total_consequence / (
-            iterations * len(self.feeder_regions)
-        )
-
-        return overload_risk, overload_consequence
-
     def calculate_overload_risk(self) -> float:
         """
         计算过载风险
 
         :return: 过载风险
         """
+        # TODO: 分用户类型计算损失
+        # TODO: 计算原件故障导致线路断路无法均衡负载导致的过负荷风险
         total_risk = 0.0
         for feeder in self.feeder_regions.keys():
             feeder_risk = self._calculate_feeder_overload_risk(feeder)
