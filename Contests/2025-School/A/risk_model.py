@@ -339,7 +339,7 @@ class RiskModel:
                 )
             else:
                 return (
-                    0.1
+                    0.2
                     * np.sqrt(3)
                     * self.voltage
                     * (x / (self.feeder_current_limit * 1.1))
@@ -351,24 +351,6 @@ class RiskModel:
             0,
             np.inf,
         )[0]
-
-        # 若电流超过馈线电流限制，则计算过载风险
-        # if current > self.feeder_current_limit * 1.1:
-        #     excess_current = current - self.feeder_current_limit * 1.1
-        #     overload_ratio = excess_current / (self.feeder_current_limit * 1.1)
-        #     # 这里简化为线性映射
-        #     overload_risk = min(1.0, overload_ratio * 2)
-        #     overload_consequence = (
-        #         excess_current
-        #         * self.feeder_capacity
-        #         / (self.feeder_current_limit * 1.1)
-        #     )
-        #     total_risk += overload_risk * overload_consequence
-        # else:
-        #     # 考虑潜在风险
-        #     load_ratio = current / self.feeder_current_limit
-        #     potential_risk = 0.1 * (1 + load_ratio)
-        #     total_risk += potential_risk
 
         return total_risk
 
