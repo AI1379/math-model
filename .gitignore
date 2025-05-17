@@ -131,3 +131,4 @@ data/
 *.synctex.gz
 
 _minted/
+*.minted

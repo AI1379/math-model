@@ -1,6 +1,7 @@
 \documentclass{article}
 
 \usepackage[UTF8]{ctex}
+\usepackage{array}
 \usepackage[
   a4paper,
   left=2.5cm,
@@ -18,6 +19,11 @@
 \usepackage{minted}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{capt-of}
+\usepackage{newfloat}
+\DeclareFloatingEnvironment[fileext=lol,placement={!ht},name=代码]{code}
 
 \renewcommand{\maketitlehookb}{
   \ifx\theauthor\empty
@@ -27,6 +33,24 @@
     \textbf{\theauthor}
   \end{center}
   \fi
+}
+
+% 使用黑白主题，方便打印
+% \usemintedstyle{bw}
+
+\newcommand{\inputcode}[4][]{
+  \begin{center}
+    \inputminted[
+      breaklines,
+      breakanywhere,
+      linenos
+    ]{#4}{#3}
+    \ifx&#1&
+    \captionof{code}{#2}
+    \else
+    \captionof{code}{#2}\label{#1}
+    \fi
+  \end{center}
 }
 
 \title{分布式能源配电网风险分析}
@@ -85,6 +109,30 @@
 \end{enumerate}
 
 \subsection{符号说明}\label{subsec:notation}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{>{\centering\arraybackslash}p{0.3\textwidth}>{\centering\arraybackslash}p{0.6\textwidth}}
+    \toprule
+    符号 & 含义 \\
+    \midrule
+    $R_{\text{sys}}$ & 系统风险 \\
+    $P_{\text{LL}}$ & 失负荷概率 \\
+    $C_{\text{LL}}$ & 失负荷危害程度 \\
+    $P_{\text{OL}}$ & 过负荷概率 \\
+    $C_{\text{OL}}$ & 过负荷危害程度 \\
+    $\mathcal{N}$ & 配电网中节点的集合 \\
+    $\mathcal{L}$ & 配电网中线路的集合 \\
+    $\mathcal{S}$ & 配电网中开关的集合 \\
+    $R_i$ & 元件 $i$ 的风险 \\
+    $P_i^{\text{dg}}$ & 分布式发电节点 $i$ 的出力功率 \\
+    $U$ & 配电网的电压 \\
+    $I_{\text{rated}}$ & 线路的额定电流 \\
+    \bottomrule
+  \end{tabular}
+  \caption{符号说明}
+  \label{tab:notation}
+\end{table}
 
 \section{模型建立与求解}\label{sec:model}
 
@@ -226,7 +274,7 @@ dg 节点的出力功率的和为 $P_{\mathcal{N}}^{dg}$ ，从其他馈线转�
 然后，针对每个节点的故障单元，计算其失负荷和过负荷风险。
 最后，综合所有节点的风险值，得到系统的总风险值 $R_{\text{sys}}$。
 
-首先有网络拓扑图如下：
+首先有网络拓扑图，如图 \ref{fig:network_topology} 所示。
 
 \begin{figure}[htbp]
   \centering
@@ -270,7 +318,7 @@ dg 节点的出力功率的和为 $P_{\mathcal{N}}^{dg}$ ，从其他馈线转�
 然后，针对每个节点的故障单元，计算其失负荷和过负荷风险。
 计算结果表 \ref{tab:risk_evolution} 所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \begin{tabular}{ccccc}
     \toprule
@@ -292,7 +340,7 @@ dg 节点的出力功率的和为 $P_{\mathcal{N}}^{dg}$ ，从其他馈线转�
 
 同时，我们使用 matplotlib 库绘制系统风险随分布式能源接入容量变化的曲线图，如图 \ref{fig:risk_evolution} 所示。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.8\textwidth]{problem2/dg_capacity_trending.png}
   \caption{分布式能源接入容量对系统风险的影响}
@@ -305,7 +353,7 @@ dg 节点的出力功率的和为 $P_{\mathcal{N}}^{dg}$ ，从其他馈线转�
 
 同时，还有分馈线的风险占比随分布式能源接入容量变化的曲线图，如图 \ref{fig:line_risk_evolution} 所示。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.8\textwidth]{problem2/dg_capacity_trending_feeder.png}
   \caption{馈线风险占比随分布式能源接入容量变化}
@@ -314,15 +362,60 @@ dg 节点的出力功率的和为 $P_{\mathcal{N}}^{dg}$ ，从其他馈线转�
 
 经过以上分析，可以得出：当容量因子为 1.9 时，系统的风险最低，降低到了约 27.77。
 
-\section{模型分析检验}\label{sec:analysis_check}
+% \section{模型分析检验}\label{sec:analysis_check}
+% TODO: 这里需要补充模型分析检验的内容
 
 \section{模型评价与推广}\label{sec:evaluation}
+
+\subsection{模型的优点}\label{subsec:advantages}
+
+本研究的模型具有以下优点：
+
+\begin{enumerate}
+  \item 综合考虑了失负荷与过负荷风险，能够全面评估分布式能源接入对配电网的影响。
+  \item 采用了图论分析方法，能够有效处理大规模配电网的拓扑结构。
+  \item 模型本身较为简单，易于实现，计算效率高。
+  \item 结合了数据分析与仿真验证，能够提供可靠的风险评估结果。
+  \item 为配电网的规划与优化提供了理论支持，具有重要的现实意义。
+\end{enumerate}
+
+\subsection{模型的不足}\label{subsec:disadvantages}
+
+本研究的模型也存在一些不足之处：
+
+\begin{enumerate}
+  \item 假设分布式能源出力为固定值，未考虑其波动性和不确定性对风险评估的影响。
+  \item 模型中未考虑配电网的动态特性，可能导致风险评估结果的偏差。
+  \item 模型中使用的权重因子和损失函数参数缺乏实证依据，可能影响模型的准确性。
+  \item 模型的推广性有限，可能不适用于所有类型的配电网。
+  \item 模型结构过于简单，未考虑其他可能影响风险的因素，如天气、负荷变化等。
+\end{enumerate}
+
+\subsection{模型的推广和优化}\label{subsec:promotion_optimization}
+
+针对模型的不足之处，我们可以考虑以下优化和推广方向：
+
+\begin{enumerate}
+  \item 引入分布式能源出力的波动性和不确定性，采用随机建模方法进行风险评估。
+  \item 考虑配电网的动态特性，建立动态风险评估模型。
+  \item 基于实证数据优化权重因子和损失函数参数，提高模型的准确性。
+  \item 扩展模型的适用范围，考虑不同类型配电网的特点。
+  \item 引入其他影响因素，如天气、负荷变化等，建立更为复杂的风险评估模型。
+\end{enumerate}
 
 \section{附录}\label{sec:appendix}
 
 \subsection{代码实现}\label{subsec:code}
 
 % minted 环境构建速度较慢，因此暂时注释掉
-% \inputminted{python}{Q1_risk_model.py}
+\subsubsection{风险模型代码}\label{subsubsec:risk_model_code}
+\inputcode[code:risk_model]{风险模型代码}{risk_model.py}{python}
+\inputcode[code:q1_risk_model]{问题 1 风险模型代码}{Q1_risk_model.py}{python}
+
+\subsubsection{分布式能源容量趋势代码}\label{subsubsec:dg_capacity_trending_code}
+\inputcode[code:q2_dg_capacity_trending]{分布式能源容量趋势代码}{Q2_dg_capacity_trending.py}{python}
+
+\subsubsection{其余工具代码}\label{subsubsec:other_tools_code}
+\inputcode[code:run_all]{运行所有代码}{run_all.py}{python}
 
 \end{document}
