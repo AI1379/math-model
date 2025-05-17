@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.stats import beta
+from scipy.stats import norm
+from scipy.integrate import quad
 import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -14,6 +15,9 @@ class RiskModel:
         substation_data: Dict[str, int] = {},
         tie_switches: Dict[str, Tuple[int, int]] = {},
         dg_data: List[Dict[Literal["node", "capacity"], Union[int, float]]] = [],
+        node_type: Dict[
+            int, Literal["Residential", "Commercial", "Governmental", "Industrial"]
+        ] = {},
         feeder_capacity: float = 2200,
         feeder_current_limit: float = 220,
         voltage: float = 10,
@@ -39,6 +43,14 @@ class RiskModel:
         :param switch_failure_rate: 开关的故障率
         :param line_failure_rate_per_km: 每公里线路的故障率
         """
+        self.node_weight = {
+            "Residential": 0.2,
+            "Commercial": 0.5,
+            "Governmental": 0.8,
+            "Industrial": 1.0,
+        }
+        self.node_type = node_type
+
         self.nodes_data = nodes_data
         self.lines_data = lines_data
 
@@ -134,17 +146,20 @@ class RiskModel:
         :param node: 节点编号
         :return: 负荷损失
         """
-        feeder = self.feeder_table[node]
+        # 如果是 dg 直接相连的节点，则认为本身不会发生故障，发生故障一定是 dg 故障
         if is_dg:
             return next(
                 (dg["capacity"] for dg in self.dg_data if dg["node"] == node), 0
             )
 
-        loss = self.node_loads[node]
-        transferable_load = 0
-        # remaining_capacity = self._calculate_remaining_capacity(feeder)
-        # transferable_load = min(loss, remaining_capacity)
-        return loss - transferable_load
+        # 否则考虑节点故障导致的损失
+        loss = max(
+            self.node_loads[node]
+            - self._calculate_remaining_capacity(self.feeder_table[node]),
+            0,
+        )
+
+        return loss * self.node_weight[self.node_type[node]]
 
     def _calculate_line_failure_load_loss(self, line: Tuple[int, int]) -> float:
         """
@@ -190,7 +205,12 @@ class RiskModel:
                 )
                 total_loss -= min(other_remaining_capacity, total_loss)
 
-        return total_loss
+        # 计算平均权重，简化分析
+        mean_weight = sum(
+            self.node_weight[self.node_type[node]] for node in affected_nodes
+        ) / len(affected_nodes)
+
+        return total_loss * mean_weight
 
     def _calculate_switch_failure_load_loss(self, switch: Tuple[int, int]) -> float:
         """
@@ -208,7 +228,6 @@ class RiskModel:
 
         :return: 负荷损失风险
         """
-        # TODO: 加权计算损失
         total_risk = 0.0
 
         # 分三部分计算风险
@@ -301,23 +320,55 @@ class RiskModel:
         total_risk = 0.0
         current = self._calculate_feeder_current(feeder)
 
+        # TODO: 认为馈线电流为正态分布
+        mu = current
+        sigma = 0.1 * current  # 假设标准差为平均值的10%
+        mean_weight = sum(
+            self.node_weight[self.node_type[node]]
+            for node in self.feeder_regions[feeder]
+        ) / len(self.feeder_regions[feeder])
+
+        def overload_consequence(x: float) -> float:
+            if x > self.feeder_current_limit * 1.1:
+                return (
+                    2
+                    * np.sqrt(3)
+                    * self.voltage
+                    * (x - self.feeder_current_limit * 1.1 + 0.1)
+                    * mean_weight
+                )
+            else:
+                return (
+                    0.1
+                    * np.sqrt(3)
+                    * self.voltage
+                    * (x / (self.feeder_current_limit * 1.1))
+                    * mean_weight
+                )
+
+        total_risk = quad(
+            lambda x: overload_consequence(x) * norm.pdf(x, mu, sigma),
+            0,
+            np.inf,
+        )[0]
+
         # 若电流超过馈线电流限制，则计算过载风险
-        if current > self.feeder_current_limit * 1.1:
-            excess_current = current - self.feeder_current_limit * 1.1
-            overload_ratio = excess_current / (self.feeder_current_limit * 1.1)
-            # 这里简化为线性映射
-            overload_risk = min(1.0, overload_ratio * 2)
-            overload_consequence = (
-                excess_current
-                * self.feeder_capacity
-                / (self.feeder_current_limit * 1.1)
-            )
-            total_risk += overload_risk * overload_consequence
-        else:
-            # 考虑潜在风险
-            load_ratio = current / self.feeder_current_limit
-            potential_risk = 0.1 * (1 + load_ratio)
-            total_risk += potential_risk
+        # if current > self.feeder_current_limit * 1.1:
+        #     excess_current = current - self.feeder_current_limit * 1.1
+        #     overload_ratio = excess_current / (self.feeder_current_limit * 1.1)
+        #     # 这里简化为线性映射
+        #     overload_risk = min(1.0, overload_ratio * 2)
+        #     overload_consequence = (
+        #         excess_current
+        #         * self.feeder_capacity
+        #         / (self.feeder_current_limit * 1.1)
+        #     )
+        #     total_risk += overload_risk * overload_consequence
+        # else:
+        #     # 考虑潜在风险
+        #     load_ratio = current / self.feeder_current_limit
+        #     potential_risk = 0.1 * (1 + load_ratio)
+        #     total_risk += potential_risk
 
         return total_risk
 
@@ -341,8 +392,7 @@ class RiskModel:
 
         :param path: 保存路径，默认为 None，表示直接显示图形
         """
-
-        # TODO: 使用 PyVis 优化网络拓扑图绘制
+        # TODO: 分类染色节点
 
         node_labels = {
             node: f"{node}\n{data['load']}kW"
@@ -403,6 +453,71 @@ def get_default_model() -> RiskModel:
         {"node": 59, "capacity": 300},
     ]
 
+    node_type = {
+        1: "Residential",
+        2: "Residential",
+        3: "Residential",
+        4: "Residential",
+        5: "Residential",
+        6: "Residential",
+        7: "Industrial",
+        8: "Residential",
+        9: "Governmental",
+        10: "Residential",
+        11: "Commercial",
+        12: "Industrial",
+        13: "Residential",
+        14: "Industrial",
+        15: "Residential",
+        16: "Commercial",
+        17: "Residential",
+        18: "Industrial",
+        19: "Residential",
+        20: "Residential",
+        21: "Governmental",
+        22: "Residential",
+        23: "Residential",
+        24: "Residential",
+        25: "Residential",
+        26: "Residential",
+        27: "Commercial",
+        28: "Residential",
+        29: "Governmental",
+        30: "Residential",
+        31: "Commercial",
+        32: "Industrial",
+        33: "Commercial",
+        34: "Commercial",
+        35: "Residential",
+        36: "Governmental",
+        37: "Residential",
+        38: "Commercial",
+        39: "Residential",
+        40: "Industrial",
+        41: "Residential",
+        42: "Commercial",
+        43: "Residential",
+        44: "Residential",
+        45: "Governmental",
+        46: "Residential",
+        47: "Industrial",
+        48: "Residential",
+        49: "Commercial",
+        50: "Residential",
+        51: "Residential",
+        52: "Residential",
+        53: "Commercial",
+        54: "Residential",
+        55: "Residential",
+        56: "Commercial",
+        57: "Residential",
+        58: "Governmental",
+        59: "Residential",
+        60: "Residential",
+        61: "Governmental",
+        62: "Residential",
+    }
+
     tie_switches = {
         "S13-1": (13, 23),
         "S29-2": (29, 43),
@@ -421,6 +536,7 @@ def get_default_model() -> RiskModel:
         substation_data=substation_switches,
         tie_switches=tie_switches,
         dg_data=dg_data,
+        node_type=node_type,
     )
 
     return model

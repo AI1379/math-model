@@ -101,7 +101,7 @@ def analyze_dg_capacity(
             + model.network.subgraph(nodes).size("failure_rate")
         )
         / total_risk
-        for feeder, nodes in model.feeder_regions.items()
+        for _, nodes in model.feeder_regions.items()
     ]
     feeder_results = {
         feeder_name: [risk * ratio for risk in results["system_risk"]]
