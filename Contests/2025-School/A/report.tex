@@ -61,9 +61,26 @@
 \maketitle
 
 \begin{abstract}\label{sec:abstract}
-  摘要
 
-  \textbf{关键词：} 关键词1，关键词2，关键词3
+  随着我国实现“双碳”目标的推行，分布式能源在配电网中的广泛应用成为必然，它能够减少经济损失，并有利于推广清洁能源。
+  但其出力波动性与不确定性对配电网运行带来更大风险与评估难度。本研究聚焦分布式能源接入配电网后的风险评估问题，通过数学建模量化失负荷与过负荷风险，提出系统化的分析框架。
+
+  针对问题 1，在建模上，我们首先构建了综合风险评估模型来描述系统运行的风险值。
+  接着，独立分析不同节点的故障风险，通过分析故障单元分别为负载、线路、开关时的失负荷损失，从而确定失负荷风险。
+  然后，计算馈线的电流、功率，通过正态分布和损失函数处理，确定过负荷风险。
+  最后，在 62 节点有源配电网系统中验证了模型的有效性。在技术线路上，我们通过使用 networkx 库构建配电网的拓扑结构，利用 pandas 和 numpy 库处理负荷和出力数据。
+  最终结果表明系统失负荷风险占比 95.51\%，过负荷风险占比 4.49\%，系统总风险值为 36.82，总风险程度较高。
+
+  针对问题 2，在建模上，我们首先分析了分布式能源容量对系统风险的影响，通过调整接入容量评估风险演变。
+  接着，为每个馈线定义风险占比，量化每个馈线承担的风险。
+  然后，结合不同容量运行场景，分析风险的动态变化。
+  在技术线路上，我们依旧使用 python 进行仿真分析，并结合 matplotlib 库进行可视化。
+  最终研究结果表明，当容量因子为 1.9 时，系统风险最低，降至 27.77。
+
+  本研究在理论与实践上均具有重要价值，为实现高效、稳定的配电网运行提供了技术支持。
+  通过系统化的风险评估和优化策略，为配电网规划与运行提供了科学依据。
+
+  \textbf{关键词：} 分布式能源，配电网，风险评估，失负荷，过负荷
 \end{abstract}
 
 \newpage
@@ -128,6 +145,7 @@
     $P_i^{\text{dg}}$ & 分布式发电节点 $i$ 的出力功率 \\
     $U$ & 配电网的电压 \\
     $I_{\text{rated}}$ & 线路的额定电流 \\
+    $(\cdot)^+$ & 取正值 \\
     \bottomrule
   \end{tabular}
   \caption{符号说明}
@@ -187,7 +205,7 @@
 \begin{equation}\label{eq:loss_node}
   L_{\text{node},i} =
   \begin{cases}
-    (P_i - P_{\text{remain}}) \cdot w_i & \text{if } i \text{ is a load} \\
+    (P_i - P_{\text{remain}})^+ \cdot w_i & \text{if } i \text{ is a load} \\
     P_i^{dg} & \text{if } i \text{ is a dg node}
   \end{cases}
 \end{equation}
@@ -201,11 +219,10 @@
 形式化地说，假设故障边的编号为 $i$ ，故障子树的节点集合为 $\mathcal{N}$ ，对应的负载功率的和为 $P_{\mathcal{N}}$ ，
 dg 节点的出力功率的和为 $P_{\mathcal{N}}^{dg}$ ，从其他馈线转移的功率为 $P_{\text{transfer}}$ ，则失负荷损失为：
 \begin{equation}\label{eq:loss_line}
-  L_{\text{line},i} = \max\left(
-    0,
+  L_{\text{line},i} = \left(
     \frac{\sum_{k\in\mathcal{N}}w_k}{|\mathcal{N}|} \cdot
     (P_{\mathcal{N}} - P_{\text{transfer}} - P_{\mathcal{N}}^{dg})
-  \right)
+  \right)^+
 \end{equation}
 
 当故障单元为开关时，为了简化处理，我们认为它不会影响到任何节点的功率转移，即：
